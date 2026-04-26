@@ -3,9 +3,9 @@ from sklearn.ensemble import IsolationForest
 from sklearn.metrics import classification_report
 
 # load data
-X_train = pd.read_csv("data/processed/X_monday_scaled.csv")
-X_test = pd.read_csv("data/processed/X_wednesday_scaled.csv")
-y_test = pd.read_csv("data/processed/y_wednesday.csv")
+X_train = pd.read_csv("data/processed/X_train_monday_scaled.csv")
+X_test = pd.read_csv("data/processed/X_test_wednesday_scaled.csv")
+y_test = pd.read_csv("data/processed/y_test_wednesday.csv")
 
 # تحويل labels إلى 0 و 1
 # 0 = normal (BENIGN)
@@ -17,6 +17,7 @@ model = IsolationForest(contamination=0.1, random_state=42)
 
 print("Training model...")
 model.fit(X_train)
+
 
 print("Testing model...")
 y_pred = model.predict(X_test)
