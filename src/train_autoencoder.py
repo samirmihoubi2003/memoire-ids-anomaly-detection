@@ -157,7 +157,6 @@ for name, value in thresholds.items():
 
 # Current selected threshold
 threshold = thresholds["p90"]
-
 print("\nSelected threshold:", threshold)
 
 # =========================
@@ -173,6 +172,16 @@ y_pred = (test_errors > threshold).astype(int)
 # =========================
 # 9) Evaluation
 # =========================
+import os
 
+os.makedirs("models", exist_ok=True)
+
+# Save model
+torch.save(model.state_dict(), "models/autoencoder_model.pth")
+
+# Save threshold
+np.save("models/autoencoder_threshold.npy", threshold)
+
+print("\nModel and threshold saved.")
 print("\nClassification Report:")
 print(classification_report(y_test, y_pred))
