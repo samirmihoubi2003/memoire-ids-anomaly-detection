@@ -1,4 +1,5 @@
 import os
+import random
 import joblib
 import numpy as np
 import pandas as pd
@@ -18,8 +19,18 @@ from sklearn.metrics import classification_report, fbeta_score, f1_score
 
 RANDOM_STATE = 42
 
+os.environ["PYTHONHASHSEED"] = str(RANDOM_STATE)
+
+random.seed(RANDOM_STATE)
 np.random.seed(RANDOM_STATE)
 torch.manual_seed(RANDOM_STATE)
+
+if torch.cuda.is_available():
+    torch.cuda.manual_seed(RANDOM_STATE)
+    torch.cuda.manual_seed_all(RANDOM_STATE)
+
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 
 # =========================================================
@@ -117,13 +128,25 @@ y_train_tensor = torch.tensor(y_train.values, dtype=torch.float32).unsqueeze(1)
 y_val_np = y_val.values
 y_test_np = y_test.values
 
+
+# =========================================================
+# 8) Deterministic DataLoader
+# =========================================================
+
+generator = torch.Generator()
+generator.manual_seed(RANDOM_STATE)
+
 train_loader = DataLoader(
-    TensorDataset(X_train_tensor, y_train_tensor), batch_size=1024, shuffle=True
+    TensorDataset(X_train_tensor, y_train_tensor),
+    batch_size=1024,
+    shuffle=True,
+    generator=generator,
+    num_workers=0,
 )
 
 
 # =========================================================
-# 8) Hybrid CNN + MLP Classifier
+# 9) Hybrid CNN + MLP Classifier
 # =========================================================
 
 
@@ -184,7 +207,7 @@ model = HybridCNNMLP(input_dim=input_dim).to(device)
 
 
 # =========================================================
-# 9) Loss function with class imbalance handling
+# 10) Loss function with class imbalance handling
 # =========================================================
 
 num_normal = (y_train == 0).sum()
@@ -192,12 +215,14 @@ num_attack = (y_train == 1).sum()
 
 pos_weight = torch.tensor([num_normal / num_attack], dtype=torch.float32).to(device)
 
+print("\nPos weight:", pos_weight.item())
+
 criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
 optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
 
 # =========================================================
-# 10) Training
+# 11) Training
 # =========================================================
 
 epochs = 15
@@ -228,7 +253,7 @@ for epoch in range(epochs):
 
 
 # =========================================================
-# 11) Threshold selection on validation only
+# 12) Threshold selection on validation only
 # =========================================================
 
 model.eval()
@@ -262,7 +287,7 @@ print("\nSelected threshold from validation:", best_threshold)
 
 
 # =========================================================
-# 12) Final strict test on Friday
+# 13) Final strict test on Friday
 # =========================================================
 
 with torch.no_grad():
@@ -276,7 +301,7 @@ print(classification_report(y_test_np, y_pred))
 
 
 # =========================================================
-# 13) Save model and preprocessing objects
+# 14) Save model and preprocessing objects
 # =========================================================
 
 os.makedirs("models", exist_ok=True)
