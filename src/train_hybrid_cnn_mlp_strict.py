@@ -11,13 +11,14 @@ from torch.utils.data import DataLoader, TensorDataset
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.feature_selection import VarianceThreshold
-from sklearn.metrics import classification_report, fbeta_score, f1_score
+from sklearn.metrics import classification_report, f1_score, fbeta_score
 
 # =========================================================
 # 1) Reproducibility
 # =========================================================
 
 RANDOM_STATE = 42
+FINAL_THRESHOLD = 0.5
 
 os.environ["PYTHONHASHSEED"] = str(RANDOM_STATE)
 
@@ -189,8 +190,6 @@ class HybridCNNMLP(nn.Module):
         )
 
     def forward(self, x):
-        # x shape: (batch, 1, features)
-
         cnn_features = self.cnn_branch(x)
 
         flat_x = x.squeeze(1)
@@ -253,7 +252,7 @@ for epoch in range(epochs):
 
 
 # =========================================================
-# 12) Threshold selection on validation only
+# 12) Validation check with fixed threshold
 # =========================================================
 
 model.eval()
@@ -262,28 +261,15 @@ with torch.no_grad():
     val_logits = model(X_val_tensor.to(device))
     val_probs = torch.sigmoid(val_logits).cpu().numpy().flatten()
 
-threshold_candidates = [0.5, 0.4, 0.3, 0.25, 0.2, 0.15, 0.1]
+val_pred = (val_probs >= FINAL_THRESHOLD).astype(int)
 
-print("\n===== Validation threshold search =====")
+val_f1 = f1_score(y_val_np, val_pred, zero_division=0)
+val_f2 = fbeta_score(y_val_np, val_pred, beta=2, zero_division=0)
 
-best_threshold = None
-best_score = -1
-
-for threshold in threshold_candidates:
-    val_pred = (val_probs >= threshold).astype(int)
-
-    f1 = f1_score(y_val_np, val_pred, zero_division=0)
-    f2 = fbeta_score(y_val_np, val_pred, beta=2, zero_division=0)
-
-    print(
-        f"Threshold={threshold:.2f} | " f"F1_attack={f1:.4f} | " f"F2_attack={f2:.4f}"
-    )
-
-    if f2 > best_score:
-        best_score = f2
-        best_threshold = threshold
-
-print("\nSelected threshold from validation:", best_threshold)
+print("\n===== Validation check =====")
+print("Fixed threshold:", FINAL_THRESHOLD)
+print(f"Validation F1_attack: {val_f1:.4f}")
+print(f"Validation F2_attack: {val_f2:.4f}")
 
 
 # =========================================================
@@ -294,9 +280,10 @@ with torch.no_grad():
     test_logits = model(X_test_tensor.to(device))
     test_probs = torch.sigmoid(test_logits).cpu().numpy().flatten()
 
-y_pred = (test_probs >= best_threshold).astype(int)
+y_pred = (test_probs >= FINAL_THRESHOLD).astype(int)
 
 print("\n===== Friday STRICT TEST =====")
+print("Used threshold:", FINAL_THRESHOLD)
 print(classification_report(y_test_np, y_pred))
 
 
@@ -309,6 +296,6 @@ os.makedirs("models", exist_ok=True)
 torch.save(model.state_dict(), "models/hybrid_cnn_mlp_strict.pth")
 joblib.dump(selector, "models/hybrid_cnn_mlp_selector.joblib")
 joblib.dump(scaler, "models/hybrid_cnn_mlp_scaler.joblib")
-np.save("models/hybrid_cnn_mlp_threshold.npy", np.array(best_threshold))
+np.save("models/hybrid_cnn_mlp_threshold.npy", np.array(FINAL_THRESHOLD))
 
 print("\nSaved Hybrid CNN + MLP model, selector, scaler, and threshold.")
